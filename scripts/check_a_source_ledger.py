@@ -8,6 +8,7 @@ usage: python3 scripts/check_a_source_ledger.py <case_dir>
 """
 from __future__ import annotations
 
+import glob
 import os
 import re
 import sys
@@ -18,6 +19,7 @@ from harness_lib import (  # noqa: E402
     CheckResult, case_path, read_text, load_ledger, load_sources,
     sha256_text, norm, number_variants, print_and_exit, flexible_find, nfkc,
     load_reverify_log, resolve_anchor, ANCHOR_MAX_LEN,
+    referenced_eids, exception_eids,
 )
 from check_b_ledger_report import parse_necessity_items  # noqa: E402
 
@@ -50,6 +52,8 @@ TIER_POLICY = {
 HEDGE_RE = re.compile(
     r"ただし|但し|除いて|除く|除き|限り|場合を除|を控除|遡及|組替|"
     r"変更後|変更前|暫定|速報値|一過性|特殊要因|except|however|excluding")
+# PDF抽出時にcapture_source.pyが挿入するページ境界マーカー。A27の範囲決定に使う。
+PAGE_MARK_RE = re.compile(r"<<<PAGE (\d+)>>>")
 SENT_END_RE = re.compile(r"[。．\.]\s*$|」\s*$|であります$|ます$")
 SENT_START_OK_RE = re.compile(r"(?:^|[。．\n】）\)」]\s*)$")
 
@@ -71,6 +75,84 @@ def check_source_fit(res, loc, ev, src):
                     f"『{tag}』の根拠が{tier}ソース（推奨: {'/'.join(sorted(policy['allow']))}）",
                     policy["why"] + "。やむを得ず使う場合はnoteに出所と限界を"
                     f"{SUBSTANTIVE_MIN_LEN}字以上で具体的に書く（単語だけでは通らない）")
+
+
+def extended_context_zone(raw, cs, ce):
+    """A27の検査範囲を返す。局所窓(A18の前後100字)より広い「引用が属する意味的まとまり」。
+
+    WEB（<<<PAGE>>>マーカー無し）: ソーステキスト全体。
+      HTMLは1ページ＝1ファイルとして取得しているため、当該ページ全体に相当する。
+    PDF等（マーカー有り）: 引用が属するページ＋次のページまで。
+      ファイル全体だと遠い別ページの無関係な留保語を拾い誤検知が増えるため、
+      「当該ページ＋次ページ」に限定する（表の脚注が次ページ冒頭に続く配置を拾うため
+      次ページまでは含める）。
+
+    戻り値: (zone_text, zone_label)。zone_label は指摘メッセージに出す範囲の説明。
+    """
+    if "<<<PAGE" not in raw:
+        return raw, "当該ページ全体"
+
+    # マーカー位置を全列挙し、引用(cs)が属するページの開始と、次の次のマーカー手前までを範囲にする。
+    marks = [(m.start(), m.group(1)) for m in PAGE_MARK_RE.finditer(raw)]
+    if not marks:
+        return raw, "当該ページ全体"
+
+    # cs が属するページのインデックスを求める
+    cur = 0
+    for i, (pos, _num) in enumerate(marks):
+        if pos <= cs:
+            cur = i
+        else:
+            break
+    zone_start = marks[cur][0]
+    cur_page = marks[cur][1]
+    # 次ページまで含める → 範囲終端は「次の次のマーカー」の手前（無ければ末尾）
+    if cur + 2 < len(marks):
+        zone_end = marks[cur + 2][0]
+    else:
+        zone_end = len(raw)
+    next_page = marks[cur + 1][1] if cur + 1 < len(marks) else None
+    label = f"p.{cur_page}" + (f"〜p.{next_page}" if next_page else "")
+    return raw[zone_start:zone_end], label
+
+
+def check_extended_context(res, loc, ev, raw, offsets=None, quote=None):
+    """A27: 局所窓(A18)と冒頭ゾーン(A19)の中間を埋める拡張文脈スキャン。
+
+    A18は前後100字しか見ず、A19は文書冒頭しか見ないため、引用箇所とページ全体の
+    間にある留保・条件・注釈は誰も検査していなかった。ここを埋める。
+
+    検査範囲は extended_context_zone が返す「引用が属するページ（PDFは＋次ページ）
+    またはソース全体（WEB）」。その範囲に留保・条件語があり、引用にもnoteにも
+    反映されていなければWARNで指摘する。A18が既に拾った前後100字分は除外する
+    （二重指摘を避ける）。
+    """
+    cs, ce = offsets if offsets else (ev.get("char_start"), ev.get("char_end"))
+    if cs is None or ce is None or not raw:
+        return
+    if quote is None:
+        quote = raw[cs:ce]
+    if not quote:
+        return
+
+    zone, zone_label = extended_context_zone(raw, cs, ce)
+    # A18が見た前後100字は除外し、その外側だけを対象にする
+    local_before = raw[max(0, cs - 100):cs]
+    local_after = raw[ce:ce + 100]
+    already = set(HEDGE_RE.findall(quote)) | set(HEDGE_RE.findall(local_before)) \
+        | set(HEDGE_RE.findall(local_after))
+
+    note = ev.get("note", "")
+    zone_hits = set(HEDGE_RE.findall(zone)) - already
+    # noteに実質的に反映済みの語は除外（15字以上の実質記述を要求）
+    if zone_hits and substantive_ack(note, HEDGE_RE):
+        return
+    if zone_hits:
+        res.add("A27", "WARN", loc,
+                f"引用と同じ範囲（{zone_label}）に留保・条件語があるが、"
+                f"引用にもnoteにも反映されていない: {'、'.join(sorted(zone_hits))}",
+                "同一ページ内の限定・例外・注記が主張の意味を狭めていないか確認し、"
+                f"確認内容をnoteに{SUBSTANTIVE_MIN_LEN}字以上で記録する")
 
 
 def check_quote_context(res, loc, ev, raw, offsets=None, quote=None):
@@ -491,6 +573,7 @@ def run(case_dir: str) -> CheckResult:
 
         check_source_fit(res, loc, ev, src)
         check_quote_context(res, loc, ev, raw, resolved_offsets, quote)
+        check_extended_context(res, loc, ev, raw, resolved_offsets, quote)
         check_premise_zone(res, loc, ev, raw, resolved_offsets)
         check_scope_consistency(res, loc, ev, quote, raw, resolved_offsets)
         check_granularity(res, loc, ev, quote)
@@ -592,6 +675,37 @@ def run(case_dir: str) -> CheckResult:
                             "収集直後に行う設計。納品直前の一括検証は避ける")
             except ValueError:
                 pass
+
+    # A28/A29: レポートで実際に使われた証拠への遡及再アクセス要求。
+    # A23はCritical（＝調査前の予測）に強制力を掛けるが、初期のC/N判定は
+    # 「結論に影響するか」を結論が出る前に決めており、やってみたら効いた非Critical
+    # 証拠を捕捉できない。A28/A29は対象を referenced（＝レポートが実際に依存した証拠
+    # の確定記録）に変え、重要度に関係なく再アクセスを要求する。
+    # exceptions.md にE-IDを理由付きで記録すれば個別解除できる（A22と同じ例外運用）。
+    report_text = read_text(case_path(case_dir, "report.md")) or ""
+    if report_text:
+        fig_texts = [read_text(p) or "" for p in
+                     sorted(glob.glob(case_path(case_dir, "figures", "*.md")))]
+        used = referenced_eids(report_text, fig_texts)
+        exempted = exception_eids(case_dir)
+        ledger_eids = {r.get("eid") for _, r in load_ledger(case_dir) if r.get("eid")}
+        for eid in sorted(used):
+            if eid not in ledger_eids or eid in exempted:
+                continue
+            rv = reverify_rows.get(eid)
+            if not rv:
+                res.add("A28", "FAIL", eid,
+                        "レポートで根拠として引用している証拠だが、原典再アクセスの"
+                        "記録(reverify_log.jsonl)が無い（重要度に関わらず、使った証拠は"
+                        "再アクセスが必須）",
+                        "原典へ再アクセスして結果を記録する。正当に見送る場合は "
+                        "checks/exceptions.md にE-IDと理由を記録して解除する")
+            elif rv.get("outcome") == "unreachable":
+                res.add("A29", "WARN", eid,
+                        "レポートで使っている証拠が『原典にアクセスできず未検証』の"
+                        "ままになっている",
+                        "代替ソースを探すか、[調査不可]として本文に限界を明記する。"
+                        "checks/exceptions.md にE-IDと理由を記録すれば解除できる")
 
     # 逆方向: 登録したソースが使われているか
     for src in source_list:

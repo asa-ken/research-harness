@@ -454,8 +454,50 @@ def parse_tags(unit: str):
             tags["eids"].append(eid)
     return tags
 
+def exception_eids(case_dir):
+    """checks/exceptions.md に理由付きで記録されたE-IDの集合を返す。
 
-# ---------------------------------------------------------------- safe calc
+    A28/A29（レポート採用証拠の遡及再アクセス要求）の個別解除に使う。
+    単にE-IDを並べるだけの空解除を防ぐため、E-IDと同じ行に実質的な理由
+    （10字以上の記述）がある行だけを有効な解除とみなす。
+    """
+    text = read_text(case_path(case_dir, "checks", "exceptions.md")) or ""
+    exempted = set()
+    for line in text.splitlines():
+        eids = EID_RE.findall(line)
+        if not eids:
+            continue
+        # E-ID表記を除いた残りを理由とみなし、実質的な長さがあるかを見る
+        reason = EID_RE.sub("", line).strip(" \t|-—:：、,")
+        if len(reason) >= 10:
+            exempted.update(eids)
+    return exempted
+
+
+def referenced_eids(report_text: str, fig_texts=None):
+    """レポート本文と図表の根拠欄で実際に引用されているE-IDの集合を返す。
+
+    「結論に使われた証拠」の機械的な定義。check_b の孤立証拠判定(B07)と、
+    check_a の遡及再アクセス要求(A28/A29)が同じ定義を共有するために切り出した。
+
+    - 本文: iter_report_units で検査単位に分解し、[...] タグ内のE-IDを拾う
+      （地の文にE-IDを裸で書いても parse_tags は拾わないが、無出典の数値は
+       別途 B02/B03 がFAILさせるため、引用を外す逃げ道は塞がれている）
+    - 図表: データ表の根拠欄などにE-IDが直接書かれるため、テキスト全体から
+      EID_RE で拾う
+
+    fig_texts は figures/*.md の内容のリスト（省略可）。
+    """
+    refs = set()
+    for _where, unit in iter_report_units(report_text, "report.md"):
+        for eid in parse_tags(unit)["eids"]:
+            refs.add(eid)
+    for ft in (fig_texts or []):
+        for eid in EID_RE.findall(ft):
+            refs.add(eid)
+    return refs
+
+
 def safe_eval_arith(expr: str):
     """四則演算のみを評価する。任意コード実行を避けるためASTで検証する。"""
     import ast

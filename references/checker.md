@@ -25,6 +25,7 @@
 | `A19 PREMISE_ELSEWHERE` | WARN | 文書冒頭側に前提条件の記載があるが、引用は離れた位置（後半）にある |
 | `A20 SCOPE_MISMATCH` | FAIL/WARN | `value.basis_scope`（連結/単体・累計/単四半期）が引用と矛盾（FAIL）または確認できない（WARN） |
 | `A21 GRANULARITY_UNCLEAR` | WARN | 複数期が並ぶ引用（要約表由来の疑い）でconfidenceが高いまま |
+| `A27 CONTEXT_PAGEWIDE` | WARN | 引用と同じページ範囲（PDFは当該＋次ページ／WEBはソース全体）に留保・条件語があり、引用にもnoteにも反映されていない。A18(前後100字)とA19(冒頭)の中間を埋める |
 | `A11 NO_BASIS_DATETIME` | FAIL | 株価・株価指標（T4またはタグ`財務.株価指標`）に `basis_datetime`（時刻まで）が無い |
 | `A12 METRIC_BASIS_UNCLEAR` | FAIL | PER/PBR/利回り等で、noteに基準（コンセンサス予想/実績）と対象期が無い。会社予想ベースは採用基準外としてFAIL |
 | `A13 NOT_CLOSE_PRICE` | FAIL | 株価が終値ベースでない（noteに終値の記載が無い／引け時刻前のbasis_datetime／取得日より後の日付） |
@@ -186,6 +187,8 @@ A18を補う形で、**文書全体**を対象にした検査を別途行う。
 | `A24 HALLUCINATION_NOT_REMOVED` | FAIL | `hallucination`判定なのに証拠が台帳に残っている |
 | `A25 CONTEXT_REVERSAL_UNCORRECTED` | FAIL | `context_reversed`判定なのに例外規定がnoteに反映されていない |
 | `A26 REVERIFY_DELAYED` | WARN | 収集から48時間以上経ってからの再アクセス（「収集直後」の原則から外れる兆候） |
+| `A28 REVERIFY_USED_MISSING` | FAIL | レポートで実際に引用した証拠に原典再アクセスの記録が無い。重要度Cの予測に頼らず、結論が実際に依存した証拠(referenced)全てに再アクセスを要求する。`checks/exceptions.md`にE-IDと理由(10字以上)を書けば個別解除 |
+| `A29 REVERIFY_USED_UNREACHABLE` | WARN | レポートで使った証拠が`unreachable`のまま。代替ソースを探すか本文に限界を明記。exceptions.mdで解除可 |
 
 `unreachable`はいずれの検査も発火しない。**アクセスできないこと自体は
 `[調査不可]`として扱い、進行を止めない設計のため。**
@@ -346,7 +349,7 @@ python3 scripts/export_wcheck.py <case_dir> --out foo.xlsx  # 出力先を指定
 |---|---|---|
 | C-1（記述→原文整合） | GCの判定結果 | `checks/claims_review.md`の判定列 |
 | C-2（原文→原典整合） | 原典再アクセスの結果 | `reverify_log.jsonl`のoutcome |
-| C-3（文脈整合） | A15/A16/A18/A19/A20/A21の直近実行結果 | `check_a_source_ledger.py`を再実行して取得 |
+| C-3（文脈整合） | A15/A16/A18/A19/A20/A21/A27の直近実行結果 | `check_a_source_ledger.py`を再実行して取得 |
 
 ### 設計原則: 状態は固定語彙、理由は機械生成のみ
 
