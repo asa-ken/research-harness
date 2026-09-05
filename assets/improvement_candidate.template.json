@@ -1,0 +1,14 @@
+{
+  "id": "I-001",
+  "raised_at": "YYYY-MM-DD",
+  "case": "<case_dir名>",
+  "signal": "出典への疑義 / 観点の欠落指摘 / 誤りの指摘 / 手戻り / 読みにくさ / ユーザによる手直し / 依頼の空振り",
+  "observation": "会話で実際に起きたこと（事実）",
+  "failure_mode": "機構のどこが欠けていたか（症状ではなく原因）",
+  "proposal": "汎用的なルールとしての改善案（固有名詞・特定時期を含めない）",
+  "target_file": "scripts/check_b_ledger_report.py | references/xxx.md | SKILL.md",
+  "scope_evidence": ["別業種での適用例", "別市場での適用例"],
+  "recurrence": 1,
+  "severity": "correctness | efficiency | usability",
+  "added_steps": 0
+}

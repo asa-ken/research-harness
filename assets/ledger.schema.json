@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "証拠台帳エントリ (ledger.jsonl の1行)",
+  "type": "object",
+  "required": [
+    "eid",
+    "source_id",
+    "claim_type",
+    "anchor_head",
+    "anchor_tail",
+    "fact",
+    "basis_date",
+    "confidence",
+    "tags"
+  ],
+  "properties": {
+    "eid": {
+      "type": "string",
+      "pattern": "^E-\\d{4}$"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^S-\\d{3}$"
+    },
+    "claim_type": {
+      "enum": [
+        "fact",
+        "negative",
+        "forecast",
+        "opinion"
+      ],
+      "description": "fact=実績 / negative=非公表の確認 / forecast=会社予想 / opinion=第三者見解"
+    },
+    "char_start": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "raw_text内の開始位置。build_ledger.pyがanchorから自動解決する。"
+    },
+    "char_end": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "raw_text内の終了位置。build_ledger.pyがanchorから自動解決する。"
+    },
+    "fact": {
+      "type": "string",
+      "description": "自分の言葉での正規化。単位と期を明示"
+    },
+    "value": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "period": {
+          "type": "string",
+          "description": "例: 25年3月期 / FY2025 / 2025Q1"
+        },
+        "basis_scope": {
+          "type": "string",
+          "description": "数値の集計範囲。連結/単体、累計/単四半期などの区分。例: '連結', '単体', '累計', '単四半期'。value.numberが法人・期間の粒度を持つ場合は必須。"
+        }
+      }
+    },
+    "basis_date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "情報の基準日（決算期末や発表日）。取得日ではない"
+    },
+    "confidence": {
+      "enum": [
+        "高",
+        "中",
+        "低"
+      ]
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "調査カテゴリ（10区分）: ビジネスモデル/財務.実績/財務.株価指標/財務.健全性/市場環境/競争環境/技術/ガバナンス/リスク/株主還元"
+    },
+    "note": {
+      "type": "string",
+      "description": "会計基準・連単・調整後指標の定義など前提。株価指標では基準（会社予想/コンセンサス/実績）と対象期を必ず書く"
+    },
+    "registered_at": {
+      "type": "string"
+    },
+    "basis_datetime": {
+      "type": "string",
+      "description": "株価・株価指標（T4）で必須。時刻まで含むISO形式（例: 2026-08-21T15:30+09:00）。終値/ザラ場/PTSの別はnoteに書く"
+    },
+    "subject": {
+      "type": "string",
+      "description": "主張の主体（セグメント名・子会社名・製品名等）。セグメント別の数値を扱う場合は必須。台帳とレポート双方の主体が一致するかをB19が照合する。"
+    },
+    "anchor_head": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 40,
+      "description": "引用範囲の開始を示す識別語。原文の該当箇所の冒頭を短く写したもの（40字以内）。原文の再現ではなく位置の索引として使う。"
+    },
+    "anchor_tail": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 40,
+      "description": "引用範囲の終了を示す識別語。原文の該当箇所の末尾を短く写したもの（40字以内）。"
+    }
+  },
+  "description": "証拠は原文を転記せず、識別語(anchor_head/tail)と位置で指す。検証時はスクリプトがraw_textから該当範囲を読み出して照合する。"
+}

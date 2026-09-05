@@ -1,0 +1,30 @@
+[
+  {
+    "source_id": "S-001",
+    "title": "○○株式会社 2025年3月期 有価証券報告書",
+    "publisher": "○○株式会社 / EDINET",
+    "source_class": "T1",
+    "published_at": "2025-06-20",
+    "retrieved_at": "2026-08-22T10:00:00+09:00",
+    "url_or_path": "https://...(実際に到達したURL)",
+    "local_path": "raw/S-001_yuho_202503.pdf",
+    "access_method": "fetch",
+    "intended_use": "セグメント別売上と設備投資の確認（仮説H2）",
+    "priority": "H",
+    "period_context": "25年3月期",
+    "_note": "period_context: この文書全体が対象とする会計期。台帳の期の裏付けに使う"
+  },
+  {
+    "source_id": "S-002",
+    "title": "○○株式会社 2026年3月期 第1四半期 決算説明資料",
+    "publisher": "○○株式会社 IR",
+    "source_class": "T2",
+    "published_at": "2025-08-05",
+    "url_or_path": "https://...",
+    "local_path": null,
+    "access_method": "user_provided",
+    "intended_use": "受注残の推移",
+    "priority": "M",
+    "barrier_code": "FETCH_FAIL"
+  }
+]
