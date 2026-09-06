@@ -1,0 +1,14 @@
+# raw/ 以下の原本は改変検知のためバイナリ差分を取らない（テキスト正規化・改行変換を禁止）
+research/*/raw/**/*.pdf -text -diff binary
+research/*/raw/**/*.png -text -diff binary
+research/*/raw/**/*.jpg -text -diff binary
+research/*/raw/**/*.jpeg -text -diff binary
+research/*/raw/**/*.xlsx -text -diff binary
+research/*/raw/**/*.pptx -text -diff binary
+
+# テキスト系原本はSHA256照合の対象なので改行変換で原文が変わらないようLFに固定
+research/*/raw/**/*.txt text eol=lf
+research/*/raw/**/*.html text eol=lf
+research/*/raw/**/*.htm text eol=lf
+research/*/raw_text/**/*.txt text eol=lf
+research/*/ledger.jsonl text eol=lf
