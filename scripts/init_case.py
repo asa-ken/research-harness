@@ -27,6 +27,7 @@ Claudeが到達できなかった資料です。提供いただけると調査�
 
 SCOPE_TMPL = """# 調査スコープ
 
+- 対象種別: 企業 / 技術 / 業界  ← いずれかを残す（technology/industryは先行調査。references/subject-types.md の型を読む）
 - 対象: {target}
 - 起票日: {today}
 - 問い（何を判断したいか）:
