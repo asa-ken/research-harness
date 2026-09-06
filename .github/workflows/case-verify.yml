@@ -1,0 +1,106 @@
+# 案件検査（GitHub Actions ワークフロー）
+#
+# 目的: 調査案件（research/ 以下）が push されたとき、ハーネスの検査を
+#       GitHub のサーバー側で自動実行し、結果を記録として残す。
+#       Claudeの「検査は通しました」という自己申告に依存しない検証を成立させる。
+#
+# 設計意図・前提・検証範囲は docs/ci-design.md を参照。
+#
+# いつ動くか:
+#   - main ブランチへの push（research/ 以下が変わったとき）
+#   - Pull Request
+#   - 手動実行（Actions画面のボタンから）
+
+name: 案件検査
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'research/**'
+      - '.github/workflows/case-verify.yml'
+  pull_request:
+    paths:
+      - 'research/**'
+  workflow_dispatch:   # 手動実行を許可
+
+jobs:
+  verify-cases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v5
+
+      - name: Python を用意
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: 任意依存（Excel検証用）を導入
+        # skill-tests.yml と実行環境を揃える。導入理由は docs/ci-design.md 3-1 参照。
+        run: pip install openpyxl
+
+      - name: 案件を検査
+        run: |
+          # 個々の案件が失敗しても打ち切らず、全案件を実行しきってから総合判定する。
+          # 途中で止めると、残りの案件の状態が分からなくなるため。
+          if [ ! -d research ]; then
+            echo "research/ が存在しません。検査対象なしとして正常終了します。"
+            exit 0
+          fi
+
+          cases=$(find research -mindepth 1 -maxdepth 1 -type d | sort)
+          if [ -z "$cases" ]; then
+            echo "research/ に案件ディレクトリがありません。検査対象なしとして正常終了します。"
+            exit 0
+          fi
+
+          total=0
+          failed=0
+          failed_names=""
+
+          for case_dir in $cases; do
+            total=$((total + 1))
+            echo ""
+            echo "============================================================"
+            echo "案件を検査中: $case_dir"
+            echo "============================================================"
+            case_ok=1
+
+            echo "[1/2] ゲート検査: run_gate.py --gate all"
+            if python3 scripts/run_gate.py "$case_dir" --gate all; then
+              echo "  → 合格"
+            else
+              echo "  → 不合格（$case_dir のゲート検査で失敗）"
+              case_ok=0
+            fi
+
+            echo "[2/2] 実行証跡の検証: verify_gate.py --gate B"
+            if python3 scripts/verify_gate.py "$case_dir" --gate B; then
+              echo "  → 合格"
+            else
+              echo "  → 不合格（$case_dir の実行証跡の検証で失敗）"
+              case_ok=0
+            fi
+
+            if [ "$case_ok" -eq 0 ]; then
+              failed=$((failed + 1))
+              failed_names="${failed_names}  - ${case_dir}"$'\n'
+              echo "::error::案件 ${case_dir} の検査に失敗しました"
+            else
+              echo "案件 ${case_dir}: すべて合格"
+            fi
+          done
+
+          echo ""
+          echo "============================================================"
+          echo "検査結果: 対象 ${total}件 / 失敗 ${failed}件"
+          echo "============================================================"
+
+          if [ "$failed" -gt 0 ]; then
+            echo "失敗した案件:"
+            printf '%s' "$failed_names"
+            exit 1
+          fi
+
+          echo "全 ${total}件の案件が検査を通過しました。"
