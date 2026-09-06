@@ -1,0 +1,14 @@
+{
+  "gate": "A",
+  "verdict": "PASS",
+  "executed_at": "2026-09-06T13:20:29+00:00",
+  "fails": 0,
+  "warns": 51,
+  "files": {
+    "report.md": "440a594d90445652508dd79a4b4d99cf0ba321df967faa1790f8a2f9bd23ea93",
+    "ledger.jsonl": "6c20a3bc3bad2d95d867da97c871a338bf53af15eca7617c313082a7376296eb",
+    "sources.json": "dc95d0d36fe4334e191f91678173cafccf4ca8282e851082c32453d9755a61aa",
+    "figures/": "ea43c2c17540e02dd948424a16e9a292f243daf6df114e3887a466e3f46a3175"
+  },
+  "receipt_id": "44f9726062a3b90f"
+}
