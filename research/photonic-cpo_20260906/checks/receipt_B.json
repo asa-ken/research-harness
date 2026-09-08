@@ -1,14 +1,14 @@
 {
   "gate": "B",
   "verdict": "PASS",
-  "executed_at": "2026-09-06T13:20:56+00:00",
+  "executed_at": "2026-09-07T22:55:27+00:00",
   "fails": 0,
-  "warns": 106,
+  "warns": 195,
   "files": {
-    "report.md": "526904335a21e900990d00b8b30ed16236d6153decbc7502d02852ed612c8a83",
-    "ledger.jsonl": "6c20a3bc3bad2d95d867da97c871a338bf53af15eca7617c313082a7376296eb",
-    "sources.json": "dc95d0d36fe4334e191f91678173cafccf4ca8282e851082c32453d9755a61aa",
-    "figures/": "ea43c2c17540e02dd948424a16e9a292f243daf6df114e3887a466e3f46a3175"
+    "report.md": "83a1a02841020bb2abae37d0d6bff71747c1b0cb42866eaf1e2ee12b4a51f023",
+    "ledger.jsonl": "c7c4346332248037dbc611c054987ab5739f8ba7fd00b6307e94e7999327a5fd",
+    "sources.json": "5797cd15389af364b91d6d0ff1b438e6adaf1fa5981c0a8225052c56c9482787",
+    "figures/": "86e7a3d8d787d47f091bdc3edf3c07dead6de0031cb614a20c1e4d8abca6bfa2"
   },
-  "receipt_id": "a8bf7ec14321bab5"
+  "receipt_id": "b832178caf6e878c"
 }
