@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -779,10 +780,10 @@ check("A18 直後の留保を落として引用している", "a",
                         "ただし、これには一過性の要因が含まれます。"},
        "ledger": [ev(anchor_head="産業機器セグメントの売上高は",
                     anchor_tail="であります。")]}, expect=["A18"])
-check("A18 文の途中で切っている", "a",
+check("A18 文の途中で切っている（既定オフ。文境界指摘(a)は decision_log 参照）", "a",
       {"ledger": [ev(anchor_head="産業機器セグメントの売上高は",
                     anchor_tail="700,000百万円で")]},
-      expect=["A18"])
+      forbid=["A18"])
 check("A18 文頭から文末まで、前後に留保が無ければ黙る", "a",
       {"raw": {"S-001": "産業機器セグメントの売上高は700,000百万円であります。\n"
                         "従業員数は5,000名です。"},
@@ -901,8 +902,16 @@ check("実データ: 節が変われば解釈文の免除は効かない（抜�
 # =====================================================================
 # 静的検査: スクリプトが外部通信をしないこと
 # =====================================================================
+# "subprocess" は単純な文字列一致だと、同じSkill内の別スクリプトを
+# sys.executable 経由で呼ぶ正当な用途（例: publish_report.py が
+# export_wcheck.py / verify_gate.py を呼ぶ）まで誤検出する。
+# ここでは「HERE配下（同じSkill内）のスクリプトだけを呼んでいるか」を見て、
+# それ以外のコマンドを呼んでいる行だけを違反として拾う。
 FORBIDDEN = ["urllib.request", "import requests", "http.client", "socket",
-             "api.anthropic.com", "ANTHROPIC_API_KEY", "subprocess"]
+             "api.anthropic.com", "ANTHROPIC_API_KEY"]
+SUBPROCESS_ALLOWED_PATTERN = re.compile(
+    r"subprocess\.(run|call|check_call|check_output|Popen)\(\s*\[\s*sys\.executable\s*,\s*os\.path\.join\(\s*HERE\s*,"
+)
 offenders = []
 for fn in sorted(os.listdir(os.path.join(SKILL, "scripts"))):
     if not fn.endswith(".py"):
@@ -911,6 +920,12 @@ for fn in sorted(os.listdir(os.path.join(SKILL, "scripts"))):
     for token in FORBIDDEN:
         if token in body:
             offenders.append(f"{fn}: {token}")
+    if "subprocess" in body:
+        # subprocess呼び出し行のうち、Skill内スクリプト呼び出しの形になっていない行を拾う
+        for m in re.finditer(r"^.*subprocess\.\w+\(.*$", body, re.MULTILINE):
+            line = m.group(0)
+            if not SUBPROCESS_ALLOWED_PATTERN.search(line):
+                offenders.append(f"{fn}: subprocess（Skill内スクリプト呼び出し以外）: {line.strip()[:80]}")
 RESULTS.append(("静的検査: スクリプトに外部通信・課金経路が無い",
                 not offenders, offenders, [], []))
 if offenders:

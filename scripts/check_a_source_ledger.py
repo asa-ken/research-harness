@@ -181,7 +181,14 @@ def check_quote_context(res, loc, ev, raw, offsets=None, quote=None):
                       # 「売上高 1,755,000百万円 48.4% 営業利益 432,000百万円」のように
                       # 数値＋単位＋比率が複数回並ぶ業績予想表の形式も対象に含める
                       or len(re.findall(r"\d[\d,]*(?:\.\d+)?\s*(?:百万円|億円|%|％)", quote)) >= 3)
-    if not is_tabular:
+    # 文境界の指摘（引用が文の途中で始まる/終わる）は既定で出さない。
+    # anchor_head/tail は「原文の再現」ではなく「位置の索引」であり、文の途中を指すのが
+    # 通常運用である（ledger設計）。ここを毎回WARNにすると、正常な位置索引が大量に
+    # 懸念ありとして計上され、本当に見るべき指摘（下の留保・条件の脱落）が埋もれる。
+    # 文境界そのものは合否に影響しないため、既定ではノイズを止める。
+    # 意味を変える切り取り＝下の HEDGE_RE（留保・条件語の脱落）と A27・C-2 が引き続き担保する。
+    # 再び有効化したい場合は ERH_A18_SENTENCE=1 を環境変数で立てる。
+    if os.environ.get("ERH_A18_SENTENCE") == "1" and not is_tabular:
         if not SENT_END_RE.search(quote.strip()):
             res.add("A18", "WARN", loc, "引用が文末で終わっていない（文の途中で切っている）",
                     "条件節や結論部を落としていないか確認する")
@@ -189,7 +196,7 @@ def check_quote_context(res, loc, ev, raw, offsets=None, quote=None):
             res.add("A18", "WARN", loc, "引用が文頭から始まっていない（文の途中から切っている）",
                     f"直前: ...{before[-20:]}")
 
-    # 前後に留保・条件があり、引用がそれを含んでいない
+    # 前後に留保・条件があり、引用がそれを含んでいない（意味を変える切り取りの検知＝本来の防御）
     for label, window in (("直前", before), ("直後", after)):
         hits = set(HEDGE_RE.findall(window)) - set(HEDGE_RE.findall(quote))
         if hits:

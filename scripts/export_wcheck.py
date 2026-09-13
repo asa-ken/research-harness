@@ -38,6 +38,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from harness_lib import (  # noqa: E402
     case_path, read_text, load_ledger, load_reverify_log, load_sources,
+    resolve_anchor,
 )
 import check_a_source_ledger as check_a  # noqa: E402
 
@@ -94,6 +95,11 @@ FIELD_DEFS = {
     "fact": (
         "その証拠を自分の言葉で正規化した記述（単位と期を明示）。原文の正規化であり、\n"
         "レポート本文に採用したか否かとは別（台帳には未採用の証拠も残る）。"
+    ),
+    "quote": (
+        "引用原文（復元）。台帳は原文を保存せず開始・終了の目印(anchor)だけを記録するため、\n"
+        "ここで raw_text から目印を解決して該当箇所を復元して表示する。レビューはこの列を読む。\n"
+        "char範囲が解決済みならその区間、未解決ならanchorから再解決。どちらも不可なら『出力対象外』。"
     ),
     "claim_type": (
         "証拠の種別。取りうる値:\n"
@@ -178,6 +184,7 @@ COLUMNS = [
     ("src_page", "掲載ページ"),
     ("subject", "Subject"),
     ("fact", "Fact"),
+    ("quote", "引用原文(復元)"),
     ("claim_type", "種別"),
     ("confidence", "確信度"),
     ("tags", "タグ"),
@@ -319,6 +326,27 @@ def collect_c1(case_dir):
     return out
 
 
+_RAWCACHE = {}
+
+
+def _resolve_quote(case_dir, ev, cs, ce):
+    """raw_text から引用箇所を復元する。char範囲があれば区間、無ければanchor再解決。"""
+    sid = ev.get("source_id", "")
+    if not sid:
+        return NA
+    if sid not in _RAWCACHE:
+        _RAWCACHE[sid] = read_text(case_path(case_dir, "raw_text", f"{sid}.txt")) or ""
+    raw = _RAWCACHE[sid]
+    if not raw:
+        return NA
+    if isinstance(cs, int) and isinstance(ce, int) and 0 <= cs < ce <= len(raw):
+        return raw[cs:ce].strip()
+    st, a, b, span = resolve_anchor(raw, ev.get("anchor_head", ""), ev.get("anchor_tail", ""))
+    if st == "ok" and span:
+        return span.strip()
+    return NA
+
+
 def build_summary(case_dir):
     evidence = {r.get("eid"): r for _, r in load_ledger(case_dir) if r.get("eid")}
     sources, _ = load_sources(case_dir)
@@ -336,6 +364,7 @@ def build_summary(case_dir):
 
         cs, ce = ev.get("char_start"), ev.get("char_end")
         char_range = f"[{cs}:{ce}]" if cs is not None and ce is not None else NA
+        quote = _resolve_quote(case_dir, ev, cs, ce)
 
         rows.append({
             "eid": eid,
@@ -344,6 +373,7 @@ def build_summary(case_dir):
             "src_page": page if page else NA,
             "subject": fmt_optional(ev.get("subject")),
             "fact": ev.get("fact", ""),
+            "quote": quote,
             "claim_type": ev.get("claim_type", ""),
             "confidence": ev.get("confidence", ""),
             "tags": ",".join(ev.get("tags", []) or []),
@@ -421,7 +451,7 @@ def export_xlsx(case_dir, rows, out_path):
 
     widths = {
         "EID": 8, "Source": 8, "Sourceリンク(ページ付)": 30, "掲載ページ": 8,
-        "Subject": 14, "Fact": 30, "種別": 8, "確信度": 7, "タグ": 16,
+        "Subject": 14, "Fact": 30, "引用原文(復元)": 55, "種別": 8, "確信度": 7, "タグ": 16,
         "anchor_head": 16, "anchor_tail": 16, "基準日": 11,
         "value(数値構造)": 22, "note(前提)": 20, "char範囲": 12,
         "C-1判定": 9, "C-1理由(GC)": 30, "C-2判定": 9,
